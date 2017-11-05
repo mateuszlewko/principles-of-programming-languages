@@ -1,0 +1,104 @@
+#lang racket
+
+(define report-no-binding-found
+  (λ (search-var)
+    (error 'apply-env "No binding for ~s" search-var)
+  )
+)
+
+;;; (define report-invalid-env
+;;;   (λ (env)
+;;;     (error 'apply-env "Bad environment: ~s" env)
+;;;   )
+;;; )
+
+;;; eopl 2.5
+
+(define empty-env 
+  (λ () '())
+)
+
+(define extend-env
+  (λ (var val env) 
+    (cons (cons var val) env)
+  )
+)
+
+(define apply-env 
+  (λ (env search-var)
+    (if (eqv? env (empty-env))    
+      (report-no-binding-found search-var)
+      (if (eqv? (caar env) search-var)
+        (cdar env)
+        (apply-env (cdr env) search-var)
+      )
+    )
+  )
+)
+
+(define e
+  (extend-env 'd 6
+    (extend-env 'y 8
+      (extend-env 'x 7
+        (extend-env 'y 14
+         (empty-env)
+        )
+      )
+    )
+  )
+)
+
+(displayln "--- eopl 2.5 ---")
+(displayln e)
+(displayln (apply-env e 'y))
+
+;;; eopl 2.10
+(define extend-env*
+  (λ (vars vals env)
+    (foldl extend-env env vars vals)
+  )
+)
+
+(define e2 (extend-env* '(a y) '(1 2) e))
+
+(displayln "\n--- eopl 2.10 ---")
+(displayln e2)
+
+;;; eopl 2.11
+
+;;; ribcage representation
+
+(define rib-empty-env empty-env)
+
+(displayln "\n--- eopl 2.11 ---")
+(displayln (rib-empty-env))
+
+(define rib-extend-env
+  (λ (var val env) 
+    (if (eqv? env (rib-empty-env))
+      (list (list var) (list val))
+      (list 
+        (list 
+          (cons var (car env)) 
+          (cons val (cadr env))
+        )
+        (cddr env)
+      )
+    ) 
+  )
+)
+
+(define rib-e
+  (rib-extend-env 'd 6
+    (rib-extend-env 'y 8
+      (rib-extend-env 'x 7
+        ;;; (rib-extend-env 'y 14
+         (rib-empty-env)
+        ;;; )
+      )
+    )
+  )
+)
+
+(displayln rib-e)
+(displayln (cadr rib-e))
