@@ -10,7 +10,7 @@
 
 (define (zip l1 l2) (map list l1 l2))
 
-(define the-lexical-spec
+(define lex
   '((whitespace (whitespace) skip)
     (comment ("%" (arbno (not #\newline))) skip)
     (identifier
@@ -20,102 +20,15 @@
     (number ("-" digit (arbno digit)) number)
     ))
 
-;;; (define-datatype expression expression?
-;;;   (const-exp
-;;;    (num number?))
-;;;   (diff-exp
-;;;    (exp1 expression?)
-;;;    (exp2 expression?))
-;;;   (zero?-exp
-;;;    (expr expression?))
-;;;   (if-exp
-;;;    (predicate-exp expression?)
-;;;    (true-res-exp expression?)
-;;;    (false-res-exp expression?))
-;;;   (var-exp
-;;;    (var symbol?))
-;;; ;;;   (equal?-exp
-;;; ;;;    (exp1 expression?)
-;;; ;;;    (exp2 expression?))
-;;; ;;;   (less?-exp
-;;; ;;;    (exp1 expression?)
-;;; ;;;    (exp2 expression?))
-;;; ;;;   (greater?-exp
-;;; ;;;    (exp1 expression?)
-;;; ;;;    (exp2 expression?))
-;;; ;;;   (minus-exp
-;;; ;;;    (body-exp expression?))
-;;; ;;;   (add-exp
-;;; ;;;    (exp1 expression?)
-;;; ;;;    (exp2 expression?))
-;;; ;;;   (mult-exp
-;;; ;;;    (exp1 expression?)
-;;; ;;;    (exp2 expression?))
-;;; ;;;   (div-exp
-;;; ;;;    (exp1 expression?)
-;;; ;;;    (exp2 expression?))
-;;;   (let-exp
-;;;    (var symbol?)
-;;;    (val expression?)
-;;;    (body expression?))
-
-;;;   (emptylist-exp)
-;;;   (cons-exp
-;;;    (exp1 expression?)
-;;;    (exp2 expression?))
-;;;   (car-exp
-;;;    (body expression?))
-;;;   (cdr-exp
-;;;    (body expression?))
-;;;   (null?-exp
-;;;    (body expression?))
-;;;   (list-exp
-;;;    (args (list-of expression?))))
-
-;;; (define-datatype program program?
-;;;   (a-program
-;;;     (exp1 expression?)))
-
-;;; (define the-grammar
-;;;   '((program (expression) a-program)
-    
-;;;     (expression (number) const-exp)
-;;;     (expression
-;;;      ("-" "(" expression "," expression ")")
-;;;      diff-exp)
-    
-;;;     (expression
-;;;      ("zero?" "(" expression ")")
-;;;      zero?-exp)
-    
-;;;     (expression
-;;;      ("if" expression "then" expression "else" expression)
-;;;      if-exp)
-    
-;;;     (expression (identifier) var-exp)
-    
-;;;     (expression
-;;;      ("let" identifier "=" expression "in" expression)
-;;;      let-exp)   
-    
-;;;     ))
-
-(define the-grammar
+(define grammar
   '((program (expression) a-program)
     (expression (identifier) var-exp)
     (expression (number) const-exp)
     (expression ("-" "(" expression "," expression ")") diff-exp)
-    ;;; (expression ("+" "(" expression "," expression ")") add-exp)
-    ;;; (expression ("*" "(" expression "," expression ")") mult-exp)
-    ;;; (expression ("/" "(" expression "," expression ")") div-exp)
     (expression ("zero?" "(" expression ")") zero?-exp)
-    ;;; (expression ("equal?" "(" expression "," expression ")") equal?-exp)
-    ;;; (expression ("less?" "(" expression "," expression ")") less?-exp)
-    ;;; (expression ("greater?" "(" expression "," expression ")") greater?-exp)
-    ;;; (expression ("minus" "(" expression ")") minus-exp)
     (expression ("if" expression "then" expression "else" expression) if-exp)
     (expression ("let" identifier "=" expression "in" expression) let-exp)
-    ;;; (expression ("let*" (arbno identifier "=" expression) "in" expression) let*-exp)
+    (expression ("let*" (arbno identifier "=" expression) "in" expression) let*-exp)
     (expression ("cons" "(" expression "," expression ")") cons-exp)
     (expression ("car" "(" expression ")") car-exp)
     (expression ("cdr" "(" expression ")") cdr-exp)
@@ -125,10 +38,9 @@
   )
 )
 
-(sllgen:make-define-datatypes the-lexical-spec the-grammar)
+(sllgen:make-define-datatypes lex grammar)
 (define scan&parse
-  (sllgen:make-string-parser the-lexical-spec the-grammar))
-
+  (sllgen:make-string-parser lex grammar))
 
 (define report-expval-extractor-error
   (λ (name curr)
@@ -160,13 +72,12 @@
       (bool-val (bool) bool)
       (else (report-expval-extractor-error 'bool val)))))
 
-(define list-val ;; 3.10
+;; 3.10
+(define list-val->cons
   (λ (args)
     (if (null? args)
 	    (emptylist-val)
-	    (pair-val (car args) (list-val (cdr args)))
-    )
-  ))
+	    (pair-val (car args) (list-val->cons (cdr args))))))
 
 (define expval-car
   (λ (v)
@@ -186,13 +97,23 @@
 	   (emptylist-val () (bool-val #t))
 	   (else (bool-val #f)))))
 
-  ;;; (define map-value-of 
-  ;;;   (λ (exps)
-  ;;;      (map (λ (exp) (value-of exp env) exps)) 
-  ;;;   ))
-
 (define value-of
   (λ (exp env)
+    (define (val-of->num exp) 
+      (expval->num (value-of exp env)))
+
+    (define (map-value-of exps)
+      (map (λ (exp) (value-of exp env)) exps))
+
+    (define (fold-vars&exps vars exps env)
+      (if (or (null? vars)
+              (null? exps))
+        env
+        (let* ([var (car vars)]
+                [exp (car exps)]
+                [val (value-of exp env)])
+          (fold-vars&exps (cdr vars) (cdr exps) (extend-env var val env)))))
+
     (cases expression exp
 
       (const-exp (num) 
@@ -203,99 +124,51 @@
         
       (diff-exp (lhs rhs)
         (num-val
-          (- (expval->num (value-of lhs env))
-             (expval->num (value-of rhs env))
-          )))
+          (- (val-of->num lhs)
+             (val-of->num rhs))))
 
-      ;;; (add-exp (exp1 exp2)
-      ;;;         (let ((val1 (value-of exp1 env))
-      ;;;               (val2 (value-of exp2 env)))
-      ;;;           (let ((num1 (expval->num val1))
-      ;;;                 (num2 (expval->num val2)))
-      ;;;             (num-val
-      ;;;               (+ num1 num2)))))
-      ;;; (mult-exp (exp1 exp2)
-      ;;;           (let ((val1 (value-of exp1 env))
-      ;;;                 (val2 (value-of exp2 env)))
-      ;;;             (let ((num1 (expval->num val1))
-      ;;;                   (num2 (expval->num val2)))
-      ;;;               (num-val
-      ;;;               (* num1 num2)))))
-      ;;; (div-exp (exp1 exp2)
-      ;;;         (let ((val1 (value-of exp1 env))
-      ;;;               (val2 (value-of exp2 env)))
-      ;;;           (let ((num1 (expval->num val1))
-      ;;;                 (num2 (expval->num val2)))
-      ;;;             (num-val
-      ;;;               (/ num1 num2)))))
-      (zero?-exp (exp1)
-                (let ((val1 (value-of exp1 env)))
-                  (let ((num1 (expval->num val1)))
-                    (if (zero? num1)
-                        (bool-val #t)
-                        (bool-val #f)))))
+      (zero?-exp (exp)
+        (if (zero? (val-of->num exp))
+          (bool-val #t)
+          (bool-val #f)))
 
-      ;;; (equal?-exp (exp1 exp2)
-      ;;;             (let ((val1 (value-of exp1 env))
-      ;;;                   (val2 (value-of exp2 env)))
-      ;;;               (let ((num1 (expval->num val1))
-      ;;;                     (num2 (expval->num val2)))
-      ;;;                 (bool-val
-      ;;;                 (= num1 num2)))))
+      (if-exp (cond-exp true-exp false-exp)
+        (let ([cond (value-of cond-exp env)])
+          (if (expval->bool cond)
+            (value-of true-exp env)
+            (value-of false-exp env))))
 
-      ;;; (less?-exp (exp1 exp2)
-      ;;;           (let ((val1 (value-of exp1 env))
-      ;;;                 (val2 (value-of exp2 env)))
-      ;;;             (let ((num1 (expval->num val1))
-      ;;;                   (num2 (expval->num val2)))
-      ;;;               (bool-val
-      ;;;                 (< num1 num2)))))
-      ;;; (greater?-exp (exp1 exp2)
-      ;;;               (let ((val1 (value-of exp1 env))
-      ;;;                     (val2 (value-of exp2 env)))
-      ;;;                 (let ((num1 (expval->num val1))
-      ;;;                       (num2 (expval->num val2)))
-      ;;;                   (bool-val
-      ;;;                   (> num1 num2)))))
-      (if-exp (exp1 exp2 exp3)
-              (let ((val1 (value-of exp1 env)))
-                (if (expval->bool val1)
-                    (value-of exp2 env)
-                    (value-of exp3 env))))
-      ;;; (minus-exp (body-exp)
-      ;;;           (let ((val1 (value-of body-exp env)))
-      ;;;             (let ((num (expval->num val1)))
-      ;;;               (num-val (- 0 num)))))
       (let-exp (var exp body)
-        (let ((val1 (value-of exp env)))
+        (let ([val (value-of exp env)])
           (value-of body
-            (extend-env var val1 env)
+            (extend-env var val env)
           )))
 
-      ;;; (let*-exp (vars exps body) ;; 3.17
-      ;;;   (let ((vals (map (λ (x) (value-of x env))))) 
-      ;;;     (num-val 4)
-      ;;;   )
-      ;;; )
-        ;;; (let ((val1 (value-of exp1 env)))
-        ;;;   (value-of body
-        ;;;     (extend-env var val1 env)
-        ;;;   ))) 
+      ;; 3.17
+      (let*-exp (vars exps body) 
+        (let ([env (fold-vars&exps vars exps env)])  
+          (value-of body env)))
 
-      (emptylist-exp ()
-                    (emptylist-val))
-      (cons-exp (exp1 exp2) ;; 3.09
-                (let ((val1 (value-of exp1 env))
-                      (val2 (value-of exp2 env)))
-                  (pair-val val1 val2)))
+      ;; 3.09
+      (cons-exp (exp1 exp2) 
+        (pair-val (value-of exp1 env)
+                  (value-of exp2 env)))
+
       (car-exp (body)
         (expval-car (value-of body env)))
+      
       (cdr-exp (body)
         (expval-cdr (value-of body env)))
+        
+      (emptylist-exp ()
+        (emptylist-val))
+
       (null?-exp (exp)
         (expval-null? (value-of exp env)))
-      (list-exp (exp-list) ;; 3.10
-        (list-val (map (λ (x) (value-of x env)) exp-list)))
+
+      ;; 3.10
+      (list-exp (exp-list) 
+        (list-val->cons (map-value-of exp-list)))
 )))
 
 (define value-of-program 
@@ -314,8 +187,7 @@
                                        emptylist),
                                  emptylist))
                   ")
-;;; (define displ)
-;;; (displayln (run list-prog))
+
 (test-begin 
   (check-equal? 
     (run cons-list-prog) 
@@ -342,13 +214,11 @@
         (pair-val 
           (num-val 1) 
           (emptylist-val)
-        )
-      )
-    )
-  ))
+        )))))
 
-;;; (define let*-prog "let x = 30
-;;;                    in let* x = -(x,1) y = -(x,2)
-;;;                    in -(x,y)")
+(define let*-prog "let x = 30
+                   in let* x = -(x,1) y = -(x,2)
+                   in -(x,y)")
 
-;;; (displayln (run let*-prog))
+(test-begin 
+  (check-equal? (num-val 2) (run let*-prog)))
