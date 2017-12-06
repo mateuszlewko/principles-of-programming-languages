@@ -43,9 +43,9 @@
                 (alloc (- count 1)))
               '()
           ))])
-      (let ([first (newref value)])
+      (let ([arr (newref value)])
         (alloc (- count 1))
-        first))))
+        arr))))
 
 (define array-at
   (λ (array pos)
