@@ -1,4 +1,4 @@
-;; task 4.9
+;; task 4.09
 #lang eopl
 
 (require (only-in racket displayln))
@@ -26,7 +26,3 @@
 
 (define setref!
   (λ (ref val store) (gvector-set! store ref val)))
-
-;;; (define get-store-as-list
-;;;   (lambda (store)
-;;;     (gvector->list store)))

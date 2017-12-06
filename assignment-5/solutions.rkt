@@ -48,6 +48,7 @@
   (λ (proc1 arg store)
     (cases proc proc1
       (procedure (var body saved-env)
+      ;; extend-env for every arg
         (value-of body (extend-env var arg saved-env) store)))))
 
 ;; github/eopl
@@ -160,11 +161,10 @@
            (call-exp (rator rand)
               (cases answer (value-of rator env store)
                 (an-answer (proc-exp new-store)
-                  (cases answer (value-of rand env store)
-                      (an-answer (rands new-store)
-                        (let ([proc (expval->proc proc-exp)]
-                              [args rands])
-                          (apply-procedure proc args store)))))))
+                  (cases answer (value-of rand env store) ;; get value ov every operand
+                      (an-answer (arg new-store)
+                        (let ([proc (expval->proc proc-exp)])
+                          (apply-procedure proc arg store)))))))
 
            (letrec-exp (p-names b-vars p-bodies letrec-body)
               (value-of letrec-body
@@ -172,12 +172,12 @@
 
            (begin-exp (exp1 exps)
               (letrec
-                  ((value-of-begins
+                  ([value-of-begins
                     (λ (e1 es store)
-                      (let ((v1 (value-of e1 env store)))
+                      (let ((ans (value-of e1 env store)))
                         (if (null? es)
-                            v1
-                            (value-of-begins (car es) (cdr es) store))))))
+                            ans
+                            (value-of-begins (car es) (cdr es) store))))])
                 (value-of-begins exp1 exps store)))
 
            (newref-exp (exp1)
@@ -242,3 +242,10 @@
 (test-begin 
   (check-equal? (run expref-prog1) (num-val 1)) ;; 13 is odd
 )     
+
+
+(define proc-prog1 "
+                    let a = 3
+                    in let p = proc (x) -(x, a) 
+                      in -(a, (p 2))")
+(displayln (run proc-prog1))
