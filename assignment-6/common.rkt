@@ -77,6 +77,15 @@
      ("(" expression (arbno expression) ")")
      call-exp)
 
+    (expression
+     ("newarray"  "("  expression "," expression ")" )
+      newarray-exp)
+    (expression
+     ("arrayref" "(" expression "," expression ")" )
+     arrayref-exp)
+    (expression
+     ("arrayset" "(" expression "," expression "," expression ")" )
+     arrayset-exp)
     ))
 
 (sllgen:make-define-datatypes lex grammar)

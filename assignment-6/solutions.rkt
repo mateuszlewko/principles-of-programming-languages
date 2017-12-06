@@ -29,7 +29,34 @@
     (proc proc?))
   (ref-val
    (ref reference?))
+  (array-val
+   (p array?))
 )
+
+(define array?
+    (lambda (x)
+      (reference? x)))
+
+(define make-array
+  (lambda (count value)
+    (letrec ((do-alloc
+	      (lambda (count)
+		(if (> count 0)
+		    (let ((new (newref value)))
+		      (do-alloc (- count 1)))
+        '()
+    ))))
+      (let ((first (newref value)))
+	(do-alloc (- count 1))
+	first))))
+
+(define array-at
+  (lambda (array pos)
+    (deref (+ array pos))))
+
+(define array-set!
+  (lambda (array pos val)
+    (setref! (+ array pos) val)))
 
 (define-datatype environment environment?
   (empty-env)
@@ -173,6 +200,13 @@
       (ref-val (ref) ref)
       (else (report-expval-extractor-error 'reference v)))))
 
+(define expval->array
+  (λ (v)
+    (cases expval v
+	   (array-val (ref) ref)
+	   (else (report-expval-extractor-error 'array v)))))
+
+
 (define value-of
   (λ (exp env)
     (cases expression exp
@@ -229,6 +263,27 @@
         (let ((proc (expval->proc (value-of rator env)))
               (args (map (λ(x) (value-of x env)) rands)))
           (apply-procedure proc args)))
+
+      ;; 4.29
+      (newarray-exp (count-exp val-exp)
+			 (let ((count (expval->num (value-of count-exp env)))
+			       (val (value-of val-exp env)))
+			   (array-val (make-array count val))))
+
+      (arrayref-exp (exp1 exp2)
+        (let ((v1 (value-of exp1 env))
+              (v2 (value-of exp2 env)))
+          (let ((p (expval->array v1))
+          (pos (expval->num v2)))
+            (array-at p pos))))
+
+      (arrayset-exp (exp1 exp2 exp3)
+        (let ((v1 (value-of exp1 env))
+              (v2 (value-of exp2 env))
+              (v3 (value-of exp3 env)))
+          (let ((p (expval->array v1))
+          (pos (expval->num v2)))
+            (array-set! p pos v3))))
 )))
 
 (define value-of-program
@@ -281,5 +336,16 @@
       y = 5;
   {
     print (f x y)
+  }
+")
+
+(run "
+  var a = newarray(10, 5), 
+      b = newarray(5, 12),
+      p = proc (x) arrayset(a, 0, -5);
+  {
+    print (p 1);
+    print +(arrayref(a, 0), arrayref(a, 1));
+    print +(arrayref(b, 0), arrayref(a, 1))
   }
 ")
