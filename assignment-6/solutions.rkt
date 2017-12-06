@@ -30,28 +30,25 @@
   (ref-val
    (ref reference?))
   (array-val
-   (p array?))
+   (p reference?))
 )
 
-(define array?
-    (lambda (x)
-      (reference? x)))
-
-(define make-array
-  (lambda (count value)
-    (letrec ((do-alloc
-	      (lambda (count)
-		(if (> count 0)
-		    (let ((new (newref value)))
-		      (do-alloc (- count 1)))
-        '()
-    ))))
-      (let ((first (newref value)))
-	(do-alloc (- count 1))
-	first))))
+(define create-array
+  (λ (count value)
+    (letrec 
+      ([alloc
+        (λ (count)
+          (if (> count 0)
+              (let ((new (newref value)))
+                (alloc (- count 1)))
+              '()
+          ))])
+      (let ([first (newref value)])
+        (alloc (- count 1))
+        first))))
 
 (define array-at
-  (lambda (array pos)
+  (λ (array pos)
     (deref (+ array pos))))
 
 (define array-set!
@@ -266,24 +263,20 @@
 
       ;; 4.29
       (newarray-exp (count-exp val-exp)
-			 (let ((count (expval->num (value-of count-exp env)))
-			       (val (value-of val-exp env)))
-			   (array-val (make-array count val))))
+			 (let ([count (expval->num (value-of count-exp env))]
+			       [val (value-of val-exp env)])
+			   (array-val (create-array count val))))
 
       (arrayref-exp (exp1 exp2)
-        (let ((v1 (value-of exp1 env))
-              (v2 (value-of exp2 env)))
-          (let ((p (expval->array v1))
-          (pos (expval->num v2)))
-            (array-at p pos))))
+        (let ([p (expval->array (value-of exp1 env))]
+              [pos (expval->num (value-of exp2 env))])
+          (array-at p pos)))
 
       (arrayset-exp (exp1 exp2 exp3)
-        (let ((v1 (value-of exp1 env))
-              (v2 (value-of exp2 env))
-              (v3 (value-of exp3 env)))
-          (let ((p (expval->array v1))
-          (pos (expval->num v2)))
-            (array-set! p pos v3))))
+        (let ([p (expval->array (value-of exp1 env))]
+              [pos (expval->num (value-of exp2 env))]
+              [v3 (value-of exp3 env)])
+          (array-set! p pos v3)))
 )))
 
 (define value-of-program
