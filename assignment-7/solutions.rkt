@@ -181,11 +181,11 @@
 
 ;;4.06
 (define list->pairs
-  (lambda (L)
-    (if (null? L)
+  (lambda (xs)
+    (if (null? xs)
 	  (emptylist-val)
-	  (pair-val (car L)
-		    (list->pairs (cdr L))))))
+	  (pair-val (car xs)
+		    (list->pairs (cdr xs))))))
 
 ;; value-of/k : Exp * Env * Cont -> FinalAnswer
 (define value-of/k
@@ -243,14 +243,6 @@
 
             (begin-exp (exp1 exps)
               (value-of/k exp1 env (begin-cont env exps cont))
-              ;;; (letrec 
-              ;;;   ((value-of-begins
-              ;;;     (lambda (e1 es)
-              ;;;       (let ((v1 (value-of e1 env)))
-              ;;;         (if (null? es)
-              ;;;           v1
-              ;;;           (value-of-begins (car es) (cdr es)))))))
-              ;;;   (value-of-begins exp1 exps))
             )
 )))
 
@@ -326,11 +318,11 @@
                           (append prev-args (list val))
                           saved-env
                           saved-cont))))
-
+          ;; 4.09
           (set-rhs-cont (env var saved-cont)
               (begin
                 (setref! (apply-env env var) val)
-                (apply-cont saved-cont 32)))
+                (apply-cont saved-cont val)))
 
           (begin-cont (env exps saved-cont)
             (if (null? exps)
